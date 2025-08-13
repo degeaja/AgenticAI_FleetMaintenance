@@ -30,7 +30,7 @@ df[features] = scaler.fit_transform(df[features])
 joblib.dump(scaler, "scaler.save")
 
 # Sequence extraction
-SEQUENCE_LENGTH = 20
+SEQUENCE_LENGTH = 7
 X_seq, y_seq = [], []
 
 for _, group in df.groupby(["Region", "truckid"]):
@@ -97,14 +97,14 @@ class LSTMModel(nn.Module):
 
 # Training setup
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = LSTMModel(input_size=len(features), hidden_sizes=[100, 100], dropout=0.2).to(device)
-model.load_state_dict(torch.load("best_model.pt", map_location=device))
+model = LSTMModel(input_size=len(features), hidden_sizes=[200, 100, 50], dropout=0.2).to(device)
+# model.load_state_dict(torch.load("best_model.pt", map_location=device))
 criterion = nn.MSELoss()
 optimizer = optim.Adam(model.parameters(), lr=1e-4)
 
 # Early stopping
 best_loss = np.inf
-patience = 10
+patience = 30
 trigger_times = 0
 
 EPOCHS = 100

@@ -8,7 +8,7 @@ from sklearn.preprocessing import MinMaxScaler
 import joblib
 
 # --- Configuration ---
-SEQUENCE_LENGTH = 20
+SEQUENCE_LENGTH = 7
 BATCH_SIZE = 32
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -101,7 +101,7 @@ class LSTMModel(nn.Module):
         return self.sigmoid(out).squeeze()
     
 # --- Load trained model ---
-model = LSTMModel(input_size=len(features), hidden_sizes=[100, 100], dropout=0.3).to(DEVICE)
+model = LSTMModel(input_size=len(features), hidden_sizes=[200, 100, 50], dropout=0.2).to(DEVICE)
 model.load_state_dict(torch.load("best_model.pt", map_location=DEVICE))
 model.eval()
 
