@@ -10,6 +10,14 @@ import torch.nn as nn
 import torch.optim as optim
 from tqdm import tqdm
 
+import torch, os, subprocess, textwrap
+print("torch:", torch.__version__)
+print("torch.cuda.is_available():", torch.cuda.is_available())
+print("torch.version.cuda:", torch.version.cuda)
+print("device_count:", torch.cuda.device_count())
+if torch.cuda.is_available():
+    print("name:", torch.cuda.get_device_name(0))
+    print("capability:", torch.cuda.get_device_capability(0))
 # =========================
 # Load and preprocess data
 # =========================
@@ -52,7 +60,7 @@ X_train_resampled = X_train_resampled.reshape(-1, SEQUENCE_LENGTH, len(features)
 X_val = X_val.reshape(-1, SEQUENCE_LENGTH, len(features))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
+print(device)
 # =========================
 # Model definition
 # =========================
