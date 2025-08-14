@@ -5,8 +5,12 @@ from typing import Dict, Any
 from app.observability.logging_setup import logger
 from app.observability.instrumentation import start_run, end_run, run_id_var, truck_var, region_var
 from app.agent.graph import agent   # import your compiled graph (or build_graph())
+from app.observability.usage import start_usage, get_usage, clear_usage, estimate_cost
+
 from dotenv import load_dotenv
 import os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 # Load .env into environment
 load_dotenv()
@@ -15,6 +19,12 @@ load_dotenv()
 print("Loaded API key:", os.getenv("OPENAI_API_KEY"))
 
 app = FastAPI(title="Fleet Maintenance Agent")
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+@app.get("/")
+def read_root():
+    return FileResponse("app/static/index.html")
 
 # --------- Models ----------
 class RunBody(BaseModel):
@@ -35,6 +45,8 @@ async def bind_context(request: Request, call_next):
         else:
             truckid, region = "-", "-"
         start_run(truckid=truckid, region=region)
+        start_usage() 
+
         response = await call_next(request)
         return response
     except Exception as e:
@@ -47,8 +59,8 @@ async def bind_context(request: Request, call_next):
             end_run(status="ok")
 
 # --------- Endpoint ----------
-@app.post("/run")
-def run(b: RunBody):
+@app.post("/run_untracked")
+def run_untracked(b: RunBody):
     try:
         # In case middleware didn't set (e.g., different path), set here:
         if not run_id_var.get():
@@ -69,3 +81,34 @@ def run(b: RunBody):
     except Exception as e:
         end_run(status="error", error=str(e))
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/run")
+def run(b: RunBody):
+    try:
+        if not run_id_var.get():
+            start_run(truckid=b.truckid, region=b.region)
+            start_usage()  # ensure usage context exists
+
+        state = {"fleetid": b.fleetid, "truckid": b.truckid, "region": b.region}
+        if b.new_reading:
+            state["new_reading"] = b.new_reading
+
+        out = agent.invoke(state)
+
+        # attach usage + estimated cost
+        usage = get_usage()
+        out["usage"] = {
+            "model": usage.get("model"),
+            "prompt_tokens": usage.get("prompt_tokens", 0),
+            "completion_tokens": usage.get("completion_tokens", 0),
+            "total_tokens": usage.get("total_tokens", 0),
+            "estimated_cost_usd": round(estimate_cost(usage), 6),
+        }
+
+        end_run(status="ok", final_prob=out.get("prob"), maintenance=out.get("maintenance_needed"))
+        return out
+    except Exception as e:
+        end_run(status="error", error=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        clear_usage()  # <--- important to reset between requests

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Fleet Maintenance Agent</title>
+<style>
+  :root { --bg:#0b1220; --card:#121a2b; --text:#e8eefc; --muted:#9bb0d1; --accent:#6aaeff; --ok:#30d158; --warn:#ffd60a; --bad:#ff453a; --border:#1e2a44; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial; background:var(--bg); color:var(--text);}
+  header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  header h1 { margin:0; font-size:18px; font-weight:600; }
+  main { display:grid; grid-template-columns: 360px 1fr; gap:20px; padding:20px; }
+  @media (max-width: 920px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px; }
+  label { font-size:12px; color:var(--muted); display:block; margin:8px 0 6px; }
+  input, textarea, select { width:100%; padding:10px 12px; border-radius:12px; border:1px solid #2a3b60; background:#0f1727; color:var(--text); }
+  textarea { min-height:120px; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace; }
+  button { cursor:pointer; padding:12px 14px; border-radius:12px; border:1px solid #2a3b60; background:#10203a; color:var(--text); }
+  button.primary { background:linear-gradient(180deg, #1a66ff, #114ee0); border:none; }
+  button:disabled { opacity:0.6; cursor:not-allowed;}
+  .row { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+  .metrics { display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }
+  .metric { background:#0e1526; border:1px solid #1f2b49; border-radius:12px; padding:12px; }
+  .metric h3 { margin:0; font-size:12px; color:var(--muted); font-weight:500; }
+  .metric .val { font-size:20px; margin-top:6px; }
+  .good { color: var(--ok); } .warn { color: var(--warn);} .bad { color: var(--bad); }
+  pre { background:#0e1526; border:1px solid #1f2b49; border-radius:12px; padding:12px; overflow:auto; }
+  .pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid #2a3b60; }
+  .hint { color:var(--muted); font-size:12px; margin-top:6px; }
+  .footer { padding:16px 20px; color:var(--muted); font-size:12px; border-top:1px solid var(--border); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛠️ Fleet Maintenance Agent</h1>
+  <span class="pill">API: <code id="api-base"></code></span>
+</header>
+
+<main>
+  <section class="card">
+    <h2 style="margin:4px 0 12px;">Submit Telemetry</h2>
+    <div class="row">
+      <div>
+        <label>Fleet ID</label>
+        <input id="fleetid" value="Fleet_00513F1" autocomplete="off"/>
+      </div>
+      <div>
+        <label>Truck ID</label>
+        <input id="truckid" value="Truck_0051X1" autocomplete="off"/>
+      </div>
+    </div>
+    <div class="row">
+      <div>
+        <label>Region</label>
+        <input id="region" type="number" value="1"/>
+      </div>
+      <div></div>
+    </div>
+    <label>Optional: Telemetry JSON</label>
+    <textarea id="telemetry" placeholder='{"Measurement_timestamp":"22FEB16:17:55:52","Vehicle_speed_sensor":26,...}'></textarea>
+    <div class="hint">Leave empty to let the backend simulate the latest reading.</div>
+    <div style="display:flex; gap:10px; margin-top:12px;">
+      <button id="run" class="primary">Run Agent</button>
+      <button id="clear">Clear</button>
+    </div>
+    <div class="hint" id="status"></div>
+  </section>
+
+  <section class="card">
+    <h2 style="margin:4px 0 12px;">Result</h2>
+    <div class="metrics" id="metrics">
+      <div class="metric">
+        <h3>Failure Prob (7d)</h3>
+        <div class="val" id="m-prob">–</div>
+      </div>
+      <div class="metric">
+        <h3>Maintenance Needed</h3>
+        <div class="val" id="m-maint">–</div>
+      </div>
+      <div class="metric">
+        <h3>Urgency</h3>
+        <div class="val" id="m-urgency">–</div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label>Action</label>
+      <div id="m-action">–</div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label>Why (LLM)</label>
+      <div id="m-expl">–</div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <label>Raw JSON</label>
+      <pre id="raw">–</pre>
+    </div>
+  </section>
+</main>
+
+<div class="footer">
+  Tip: If your API is HTTPS, host this page via HTTPS too (e.g., S3 + CloudFront) to avoid mixed-content blocks.
+</div>
+
+<script>
+  // ---- Configure this to your FastAPI base URL ----
+  const API_BASE = "http://127.0.0.1:8080"; // e.g., http://ec2-xx-xx-xx-xx.compute-1.amazonaws.com:8080
+  document.getElementById("api-base").textContent = API_BASE;
+
+  const el = (id) => document.getElementById(id);
+  const setStatus = (msg) => el("status").textContent = msg || "";
+
+  const cls = (prob) => prob >= 0.6 ? "bad" : prob >= 0.3 ? "warn" : "good";
+
+  async function runAgent() {
+    setStatus("");
+    const runBtn = el("run");
+    runBtn.disabled = true;
+    runBtn.textContent = "Running…";
+
+    const fleetid = el("fleetid").value.trim();
+    const truckid = el("truckid").value.trim();
+    const regionVal = el("region").value.trim();
+    const region = Number(regionVal);
+
+    if (!fleetid || !truckid || !regionVal || Number.isNaN(region)) {
+      alert("Please fill Fleet ID, Truck ID, and Region (number).");
+      runBtn.disabled = false; runBtn.textContent = "Run Agent"; return;
+    }
+
+    let new_reading = undefined;
+    const t = el("telemetry").value.trim();
+    if (t) {
+      try { new_reading = JSON.parse(t); }
+      catch (e) { alert("Invalid telemetry JSON."); runBtn.disabled = false; runBtn.textContent = "Run Agent"; return; }
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/run`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({ fleetid, truckid, region, new_reading })
+      });
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(`API error: ${msg}`);
+      }
+      const out = await res.json();
+      render(out);
+      setStatus("Success");
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Request failed.");
+      setStatus("Error");
+    } finally {
+      runBtn.disabled = false;
+      runBtn.textContent = "Run Agent";
+    }
+  }
+
+  function render(out) {
+    const prob = Number(out?.prob ?? 0);
+    el("m-prob").textContent = (isNaN(prob) ? "–" : prob.toFixed(4));
+    el("m-prob").className = "val " + cls(prob);
+
+    const need = !!out?.maintenance_needed;
+    el("m-maint").textContent = need ? "Yes" : "No";
+    el("m-maint").className = "val " + (need ? "bad" : "good");
+
+    const urg = out?.urgency ?? "–";
+    el("m-urgency").textContent = urg;
+
+    el("m-action").textContent = out?.action ?? "–";
+    el("m-expl").textContent = out?.explanation ?? "–";
+
+    el("raw").textContent = JSON.stringify(out, null, 2);
+  }
+
+  document.getElementById("run").addEventListener("click", runAgent);
+  document.getElementById("clear").addEventListener("click", () => {
+    el("telemetry").value = "";
+    ["m-prob","m-maint","m-urgency","m-action","m-expl","raw"].forEach(id => el(id).textContent = "–");
+    setStatus("");
+  });
+</script>
+</body>
+</html>
