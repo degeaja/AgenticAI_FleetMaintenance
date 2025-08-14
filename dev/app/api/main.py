@@ -6,6 +6,7 @@ from app.observability.logging_setup import logger
 from app.observability.instrumentation import start_run, end_run, run_id_var, truck_var, region_var
 from app.agent.graph import agent   # import your compiled graph (or build_graph())
 from app.observability.usage import start_usage, get_usage, clear_usage, estimate_cost
+import pandas as pd
 
 from dotenv import load_dotenv
 import os
@@ -25,6 +26,59 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 @app.get("/")
 def read_root():
     return FileResponse("app/static/index.html")
+
+
+DATA_PATH = os.getenv("DATA_PATH", "app/fleet_monitor_notscored_2.csv")
+
+# Load once (fast & simple). If file changes at runtime, reload logic can be added later.
+try:
+    _df_meta = pd.read_csv(DATA_PATH, dtype={"fleetid": "string", "truckid": "string"})
+    # Normalize Region to int if possible; fall back to string.
+    if "Region" in _df_meta.columns:
+        try:
+            _df_meta["Region"] = _df_meta["Region"].astype("Int64")
+        except Exception:
+            _df_meta["Region"] = _df_meta["Region"].astype("string")
+    else:
+        raise ValueError("CSV must contain a 'Region' column")
+except Exception as e:
+    raise RuntimeError(f"Failed to load {DATA_PATH}: {e}")
+
+def _ensure_ok(df: pd.DataFrame):
+    if not {"Region", "fleetid", "truckid"}.issubset(df.columns):
+        raise RuntimeError("CSV must include columns: Region, fleetid, truckid")
+
+_ensure_ok(_df_meta)
+
+@app.get("/meta/regions")
+def meta_regions():
+    # Return sorted unique regions
+    vals = _df_meta["Region"].dropna().unique().tolist()
+    # Convert pandas Int64/NA types to plain python
+    regions = [int(v) if isinstance(v, (int,)) or (hasattr(v, "item") and isinstance(v.item(), int)) else str(v) for v in vals]
+    # Sort numbers numerically; strings lexicographically
+    try:
+        regions = sorted(regions, key=lambda x: (0, x) if isinstance(x, int) else (1, str(x)))
+    except Exception:
+        regions = sorted(regions, key=lambda x: str(x))
+    return {"regions": regions}
+
+@app.get("/meta/fleets")
+def meta_fleets(region: str | int):
+    # filter by region
+    df = _df_meta[_df_meta["Region"].astype(str) == str(region)]
+    fleets = sorted(df["fleetid"].dropna().astype(str).unique().tolist())
+    return {"fleets": fleets}
+
+@app.get("/meta/trucks")
+def meta_trucks(region: str | int, fleetid: str):
+    df = _df_meta[
+        (_df_meta["Region"].astype(str) == str(region)) &
+        (_df_meta["fleetid"].astype(str) == str(fleetid))
+    ]
+    trucks = sorted(df["truckid"].dropna().astype(str).unique().tolist())
+    return {"trucks": trucks}
+
 
 # --------- Models ----------
 class RunBody(BaseModel):

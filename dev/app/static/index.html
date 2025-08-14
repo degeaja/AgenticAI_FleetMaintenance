@@ -41,22 +41,22 @@
   <section class="card">
     <h2 style="margin:4px 0 12px;">Submit Telemetry</h2>
     <div class="row">
-      <div>
-        <label>Fleet ID</label>
-        <input id="fleetid" value="Fleet_00513F1" autocomplete="off"/>
-      </div>
-      <div>
-        <label>Truck ID</label>
-        <input id="truckid" value="Truck_0051X1" autocomplete="off"/>
-      </div>
+        <div>
+            <label>Region</label>
+            <select id="region"></select>
+        </div>
+        <div>
+            <label>Fleet ID</label>
+            <select id="fleetid" disabled></select>
+        </div>
     </div>
     <div class="row">
-      <div>
-        <label>Region</label>
-        <input id="region" type="number" value="1"/>
-      </div>
-      <div></div>
-    </div>
+        <div>
+            <label>Truck ID</label>
+            <select id="truckid" disabled></select>
+        </div>
+        <div></div>
+    </div>      
     <label>Optional: Telemetry JSON</label>
     <textarea id="telemetry" placeholder='{"Measurement_timestamp":"22FEB16:17:55:52","Vehicle_speed_sensor":26,...}'></textarea>
     <div class="hint">Leave empty to let the backend simulate the latest reading.</div>
@@ -95,6 +95,16 @@
     </div>
 
     <div style="margin-top:12px;">
+      <label>Usage</label>
+      <div id="usage">
+        <div>Model: <code id="u-model">–</code></div>
+        <div>Prompt tokens: <span id="u-pt">0</span></div>
+        <div>Completion tokens: <span id="u-ct">0</span></div>
+        <div>Total tokens: <b id="u-tt">0</b></div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
       <label>Raw JSON</label>
       <pre id="raw">–</pre>
     </div>
@@ -107,13 +117,110 @@
 
 <script>
   // ---- Configure this to your FastAPI base URL ----
-  const API_BASE = "http://127.0.0.1:8080"; // e.g., http://ec2-xx-xx-xx-xx.compute-1.amazonaws.com:8080
+  const API_BASE = (location.origin && location.origin.startsWith("http"))
+    ? location.origin
+    : "http://127.0.0.1:8080"; // fallback for file://
   document.getElementById("api-base").textContent = API_BASE;
 
   const el = (id) => document.getElementById(id);
   const setStatus = (msg) => el("status").textContent = msg || "";
-
   const cls = (prob) => prob >= 0.6 ? "bad" : prob >= 0.3 ? "warn" : "good";
+
+  // Populate a <select> with options
+  function fillSelect(selectEl, values, placeholder) {
+    selectEl.innerHTML = "";
+    const ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = placeholder;
+    ph.disabled = true;
+    ph.selected = true;
+    selectEl.appendChild(ph);
+
+    for (const v of values) {
+      const opt = document.createElement("option");
+      opt.value = v;
+      opt.textContent = v;
+      selectEl.appendChild(opt);
+    }
+  }
+
+  async function fetchJSON(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  }
+
+  async function loadRegions() {
+    const regionSel = el("region");
+    const fleetSel = el("fleetid");
+    const truckSel = el("truckid");
+
+    try {
+      const data = await fetchJSON(`${API_BASE}/meta/regions`);
+      fillSelect(regionSel, data.regions || [], "Select region");
+      // reset dependents
+      fillSelect(fleetSel, [], "Select fleet");
+      fillSelect(truckSel, [], "Select truck");
+      fleetSel.disabled = true;
+      truckSel.disabled = true;
+    } catch (e) {
+      console.error("Failed to load regions", e);
+      setStatus("Failed to load regions");
+    }
+  }
+
+  async function loadFleets() {
+    const regionSel = el("region");
+    const fleetSel = el("fleetid");
+    const truckSel = el("truckid");
+    const region = regionSel.value;
+
+    if (!region) return;
+
+    try {
+      const data = await fetchJSON(`${API_BASE}/meta/fleets?region=${encodeURIComponent(region)}`);
+      fillSelect(fleetSel, data.fleets || [], "Select fleet");
+      fleetSel.disabled = false;
+      // reset trucks
+      fillSelect(truckSel, [], "Select truck");
+      truckSel.disabled = true;
+    } catch (e) {
+      console.error("Failed to load fleets", e);
+      setStatus("Failed to load fleets");
+    }
+  }
+
+  async function loadTrucks() {
+    const region = el("region").value;
+    const fleetid = el("fleetid").value;
+    const truckSel = el("truckid");
+
+    if (!region || !fleetid) return;
+
+    try {
+      const data = await fetchJSON(`${API_BASE}/meta/trucks?region=${encodeURIComponent(region)}&fleetid=${encodeURIComponent(fleetid)}`);
+      fillSelect(truckSel, data.trucks || [], "Select truck");
+      truckSel.disabled = false;
+    } catch (e) {
+      console.error("Failed to load trucks", e);
+      setStatus("Failed to load trucks");
+    }
+  }
+
+  // Wire cascading changes once DOM is ready
+  document.addEventListener("DOMContentLoaded", () => {
+    // show base in header
+    const apiBaseEl = el("api-base");
+    if (apiBaseEl) apiBaseEl.textContent = API_BASE;
+
+    // initial load
+    loadRegions();
+
+    // onchange cascade
+    el("region").addEventListener("change", loadFleets);
+    el("fleetid").addEventListener("change", loadTrucks);
+  });
+
 
   async function runAgent() {
     setStatus("");
@@ -121,10 +228,10 @@
     runBtn.disabled = true;
     runBtn.textContent = "Running…";
 
-    const fleetid = el("fleetid").value.trim();
-    const truckid = el("truckid").value.trim();
-    const regionVal = el("region").value.trim();
+    const regionVal = el("region").value;
     const region = Number(regionVal);
+    const fleetid = el("fleetid").value;
+    const truckid = el("truckid").value;
 
     if (!fleetid || !truckid || !regionVal || Number.isNaN(region)) {
       alert("Please fill Fleet ID, Truck ID, and Region (number).");
@@ -174,8 +281,14 @@
     el("m-urgency").textContent = urg;
 
     el("m-action").textContent = out?.action ?? "–";
-    el("m-expl").textContent = out?.explanation ?? "–";
+    el("m-expl").textContent  = out?.explanation ?? "–";
 
+    // USAGE (expects backend to return out.usage)
+    const u = out?.usage || {};
+    el("u-model").textContent = u.model || "–";
+    el("u-pt").textContent    = u.prompt_tokens ?? 0;
+    el("u-ct").textContent    = u.completion_tokens ?? 0;
+    el("u-tt").textContent    = u.total_tokens ?? 0;
     el("raw").textContent = JSON.stringify(out, null, 2);
   }
 
@@ -183,6 +296,12 @@
   document.getElementById("clear").addEventListener("click", () => {
     el("telemetry").value = "";
     ["m-prob","m-maint","m-urgency","m-action","m-expl","raw"].forEach(id => el(id).textContent = "–");
+    // reset usage block too
+    el("u-model").textContent = "–";
+    el("u-pt").textContent = "0";
+    el("u-ct").textContent = "0";
+    el("u-tt").textContent = "0";
+    el("u-cost").textContent = "$0.000000";
     setStatus("");
   });
 </script>
