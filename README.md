@@ -3,8 +3,6 @@
 This project is a **fleet maintenance management system** enhanced with **AI-powered advisory capabilities**.  
 It integrates **LangChain**, **OpenAI/Ollama LLMs**, and AWS services to provide real-time explanations, actions, and urgency ratings based on telemetry and diagnostic data.
 
----
-
 ## 🚀 Features
 - **LLM Advisor Node** (`app/agent/nodes_llm.py`)
   - Configurable to use **OpenAI** or **Ollama** via `.env`
@@ -48,8 +46,8 @@ src/
 
 ### 1. Clone Repository
 ```bash
-git clone https://github.com/yourusername/fmm-llm.git
-cd fmm-llm
+git clone https://github.com/degeaja/AgenticAI_FleetMaintenance.git
+cd AgenticAI_FleetMaintenance
 ````
 
 ### 2. Create & Activate Virtual Environment
@@ -58,6 +56,10 @@ cd fmm-llm
 python3 -m venv venv
 source venv/bin/activate
 ```
+OR
+```bash
+conda create -y -n env_name python=3.11 
+```
 
 ### 3. Install Dependencies
 
@@ -65,7 +67,6 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
----
 
 ## 🔑 Environment Variables
 
@@ -73,8 +74,8 @@ Create a `.env` file in the project root:
 
 ```ini
 # LLM Settings
-LLM_PROVIDER=openai           # or ollama
-LLM_MODEL=gpt-4o-mini
+LLM_PROVIDER=openai           # or ollama (if you decide to self-host)
+LLM_MODEL=gpt-4o-mini         # or ollama model
 LLM_TEMPERATURE=0.1
 LLM_TIMEOUT_SECS=30
 LLM_MAX_RETRIES=2
@@ -92,7 +93,6 @@ AWS_SECRET_ACCESS_KEY=your_secret_key_here
 AWS_DEFAULT_REGION=ap-southeast-1
 ```
 
----
 
 ## ☁️ AWS Setup
 
@@ -123,7 +123,6 @@ aws s3 cp ./src/app/static/index.html s3://your-bucket-name --acl public-read
 
 Set **index document** to `index.html`.
 
----
 
 ## ▶️ Running the Backend
 
@@ -136,7 +135,6 @@ Backend endpoints:
 * `POST /run-agent` → Runs the LLM advisor and returns `explanation`, `action`, `urgency`
 * Other API routes for telemetry upload and region management
 
----
 
 ## 📡 Deployment
 
@@ -152,8 +150,6 @@ Backend endpoints:
 * Upload latest `index.html` or build artifacts to the bucket
 * Ensure bucket policy allows public read for web assets
 
----
-
 ## 🧠 How Urgency is Determined
 
 1. **LLM Decision** – The LLM outputs urgency based on context.
@@ -167,7 +163,6 @@ Backend endpoints:
    * Urgency is **elevated** for high risk
    * Urgency is **demoted** if probability is low
 
----
 
 ## 📊 Token Usage Tracking
 
