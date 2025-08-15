@@ -1,35 +1,23 @@
-from langgraph.graph import StateGraph, START, END
-from langgraph.checkpoint.memory import InMemorySaver
-from .state import FleetState
-from .nodes import validate_node, predict_node, retrieve_node, explain_node, policy_node, act_node
+from langgraph.graph import StateGraph, END
+from app.agent.state import MaintenanceState
+from app.agent.nodes_ml import get_new_sensor_reading, prepare_data, run_prediction, store_new_reading
+from app.agent.nodes_llm import llm_explain
 
-# Build graph in the canonical way (docs: Graph API & reference)
-# add_node / add_edge / add_conditional_edges ; START/END for routing
-builder = StateGraph(FleetState)
 
-# Optional: conditional entry routing from START
-def route_on_telemetry(state: FleetState) -> str:
-    t = state.get("telemetry", {})
-    # emergency guardrail
-    if t.get("avg_coolant_temp_c", 0) >= 105 or t.get("oil_pressure_kpa", 999) <= 150:
-        return "policy"   # jump straight to policy/act
-    return "validate"
+def build_graph():
+    graph = StateGraph(MaintenanceState)
+    graph.add_node("get_new_sensor_reading", get_new_sensor_reading)
+    graph.add_node("prepare_data", prepare_data)
+    graph.add_node("run_prediction", run_prediction)
+    graph.add_node("store_new_reading", store_new_reading)
+    graph.add_node("llm_explain", llm_explain)
 
-builder.add_node("validate", validate_node)
-builder.add_node("predict",  predict_node)
-builder.add_node("retrieve", retrieve_node)
-builder.add_node("explain",  explain_node)
-builder.add_node("policy",   policy_node)
-builder.add_node("act",      act_node)
+    graph.set_entry_point("get_new_sensor_reading")
+    graph.add_edge("get_new_sensor_reading", "prepare_data")
+    graph.add_edge("prepare_data", "run_prediction")
+    graph.add_edge("run_prediction", "store_new_reading")
+    graph.add_edge("store_new_reading", "llm_explain")
+    graph.add_edge("llm_explain", END)
+    return graph.compile()
 
-builder.add_conditional_edges(START, route_on_telemetry, {"validate":"validate", "policy":"policy"})
-builder.add_edge("validate", "predict")
-builder.add_edge("predict",  "retrieve")
-builder.add_edge("retrieve", "explain")
-builder.add_edge("explain",  "policy")
-builder.add_edge("policy",   "act")
-builder.add_edge("act",      END)
-
-# Persistence (thread-scoped memory)
-checkpointer = InMemorySaver()
-graph = builder.compile(checkpointer=checkpointer)
+agent = build_graph()
