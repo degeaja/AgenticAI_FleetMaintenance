@@ -117,9 +117,7 @@
 
 <script>
   // ---- Configure this to your FastAPI base URL ----
-  const API_BASE = (location.origin && location.origin.startsWith("http"))
-    ? location.origin
-    : "http://127.0.0.1:8080"; // fallback for file://
+  const API_BASE = "http://3.25.115.125:8000"; // fallback for file://
   document.getElementById("api-base").textContent = API_BASE;
 
   const el = (id) => document.getElementById(id);

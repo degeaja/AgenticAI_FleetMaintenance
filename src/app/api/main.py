@@ -1,25 +1,36 @@
 # app/api/main.py
-from fastapi import FastAPI, Request, HTTPException
-from pydantic import BaseModel
+import os
+from dotenv import load_dotenv
 from typing import Dict, Any
+import pandas as pd
+
+from pydantic import BaseModel
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+
 from app.observability.logging_setup import logger
 from app.observability.instrumentation import start_run, end_run, run_id_var, truck_var, region_var
 from app.agent.graph import agent   # import your compiled graph (or build_graph())
 from app.observability.usage import start_usage, get_usage, clear_usage, estimate_cost
-import pandas as pd
-
-from dotenv import load_dotenv
-import os
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-
 # Load .env into environment
 load_dotenv()
 
-# Debug: check if key loaded
-print("Loaded API key:", os.getenv("OPENAI_API_KEY"))
-
 app = FastAPI(title="Fleet Maintenance Agent")
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[os.environ.get("S3_ENDPOINT")],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
@@ -28,7 +39,7 @@ def read_root():
     return FileResponse("app/static/index.html")
 
 
-DATA_PATH = os.getenv("DATA_PATH", "app/fleet_monitor_notscored_2.csv")
+DATA_PATH = os.getenv("DATA_PATH", "/app/fleet_monitor_notscored_2.csv")
 
 # Load once (fast & simple). If file changes at runtime, reload logic can be added later.
 try:

@@ -139,39 +139,32 @@ def _build_messages(state: Dict[str, Any]) -> list:
 # Policy overlay (keeps outputs consistent with risk)
 # ------------------------------------------------------------------
 def _apply_policy(advice: Advisory, prob: float) -> Advisory:
-    # Elevate urgency deterministically when risk is high/medium
-    if prob >= HIGH_PROB_URGENCY and advice.urgency != "high":
-        advice.urgency = "high"
-        # Ensure action has a clear timeframe if urgent
-        if "hour" not in advice.action.lower() and "today" not in advice.action.lower():
-            advice.action = advice.action.rstrip(".") + " within 24 hours."
-    elif prob >= MED_PROB_URGENCY and advice.urgency == "low":
-        advice.urgency = "medium"
+    """
+    Enforce urgency bins from probability:
+      prob < MED_PROB_URGENCY        -> low
+      MED_PROB_URGENCY <= prob < HIGH_PROB_URGENCY -> medium
+      prob >= HIGH_PROB_URGENCY      -> high  (+ ensure 24h timeframe in action)
+    This BOTH promotes or demotes the LLM's suggestion to match policy.
+    """
+    if prob >= HIGH_PROB_URGENCY:
+        enforced = "high"
+    elif prob >= MED_PROB_URGENCY:
+        enforced = "medium"
+    else:
+        enforced = "low"
+
+    advice.urgency = enforced
+
+    # Ensure action carries time expectation when high urgency
+    if advice.urgency == "high":
+        a = advice.action or ""
+        if "hour" not in a.lower() and "today" not in a.lower():
+            advice.action = a.rstrip(".") + " within 24 hours."
     return advice
 
 # ------------------------------------------------------------------
 # Resilient call (few retries, structured parsing, safe fallback)
 # ------------------------------------------------------------------
-def _advise_with_retries(messages: list, prob: float) -> Advisory:
-    last_err = None
-    for i in range(MAX_RETRIES + 1):
-        try:
-            advice = _llm_structured.invoke(messages)  # returns Advisory (Pydantic)
-            # policy overlay
-            return _apply_policy(advice, prob)
-        except ValidationError as ve:
-            last_err = ve
-        except Exception as e:
-            last_err = e
-        # backoff
-        time.sleep(min(0.4 * (2 ** i), 2.0))
-    # Fallback (never fail the node)
-    urgency = "high" if prob >= HIGH_PROB_URGENCY else "medium" if prob >= MED_PROB_URGENCY else "low"
-    return Advisory(
-        explanation="Model indicates elevated risk given current operating signals. Prioritize system checks accordingly.",
-        action="Schedule an inspection and run full diagnostics as soon as feasible.",
-        urgency=urgency,
-    )
 
 # ------------------------------------------------------------------
 # Node entry point
@@ -198,14 +191,14 @@ def _advise_with_retries(messages: list, prob: float) -> Advisory:
     cb = TokenUsageHandler()
     for i in range(MAX_RETRIES + 1):
         try:
-            # pass callback via config so LangChain records usage
             advice = _llm_structured.invoke(messages, config={"callbacks": [cb]})
-            return _apply_policy(advice, prob)
+            return _apply_policy(advice, prob)   # <-- enforces bins (demotes/promotes)
         except ValidationError as ve:
             last_err = ve
         except Exception as e:
             last_err = e
         time.sleep(min(0.4 * (2 ** i), 2.0))
+    # fallback honors same bins
     urgency = "high" if prob >= HIGH_PROB_URGENCY else "medium" if prob >= MED_PROB_URGENCY else "low"
     return Advisory(
         explanation="Model indicates elevated risk given current operating signals. Prioritize system checks accordingly.",
