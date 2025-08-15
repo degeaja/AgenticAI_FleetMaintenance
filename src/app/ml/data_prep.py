@@ -1,6 +1,11 @@
+"""
+Prepare csv into torch-ready dataset 
+"""
+
+
 import pandas as pd
 import torch
-from app.config import CSV_PATH, SEQUENCE_LENGTH, DEVICE
+from app.ml.config import CSV_PATH, SEQUENCE_LENGTH, DEVICE
 
 def prepare_sequence(state, features, scaler):
     df = pd.read_csv(CSV_PATH)

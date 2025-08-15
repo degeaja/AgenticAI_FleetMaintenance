@@ -1,5 +1,8 @@
-import torch.nn as nn
+"""
+Model architecture
+"""
 
+import torch.nn as nn
 
 class LSTMModel(nn.Module):
     def __init__(self, input_size, hidden_sizes=[100, 50], dropout=0.2):

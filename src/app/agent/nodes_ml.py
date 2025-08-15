@@ -1,8 +1,11 @@
-from app.config import DEVICE
-from app.features import features
+"""
+LangGraph nodes and configuration for ML Model prediction. 
+"""
+import torch
+from app.ml.config import DEVICE
+from app.ml.features import features
 from app.ml.model_io import load_model_and_scaler
 from app.ml.data_prep import prepare_sequence
-import torch
 from app.observability.instrumentation import instrument_node
 
 MODEL, SCALER = load_model_and_scaler(len(features))

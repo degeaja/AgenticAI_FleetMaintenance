@@ -11,7 +11,6 @@ app/agent/nodes_llm.py
 
 from __future__ import annotations
 import os
-import math
 import time
 from typing import Literal, Any, Dict
 
@@ -27,12 +26,12 @@ from app.observability.token_callback import TokenUsageHandler
 try:
     from langchain_openai import ChatOpenAI
 except Exception:
-    ChatOpenAI = None  # optional
+    ChatOpenAI = None  
 
 try:
     from langchain_ollama import ChatOllama
 except Exception:
-    ChatOllama = None  # optional
+    ChatOllama = None  
 
 # ------------------------------------------------------------------
 # ENV / Config
@@ -40,7 +39,7 @@ except Exception:
 load_dotenv()  # load once at import; no printing secrets
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()     # "openai" | "ollama"
-LLM_MODEL    = os.getenv("LLM_MODEL", "gpt-4o-mini")           # or "llama3.1" for ollama
+LLM_MODEL    = os.getenv("LLM_MODEL", "gpt-4o-mini")           # or ollama model
 LLM_TEMP     = float(os.getenv("LLM_TEMPERATURE", "0.1"))
 LLM_TIMEOUT  = float(os.getenv("LLM_TIMEOUT_SECS", "30"))
 MAX_RETRIES  = int(os.getenv("LLM_MAX_RETRIES", "2"))
