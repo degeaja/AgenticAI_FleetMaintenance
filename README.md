@@ -53,13 +53,10 @@ cd AgenticAI_FleetMaintenance
 ### 2. Create & Activate Virtual Environment
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+conda create -y -n ai_agent python=3.11
+conda activate ai_agent
 ```
-OR
-```bash
-conda create -y -n env_name python=3.11 
-```
+
 
 ### 3. Install Dependencies
 
@@ -73,26 +70,23 @@ pip install -r requirements.txt
 Create a `.env` file in the project root:
 
 ```ini
-# LLM Settings
-LLM_PROVIDER=openai           # or ollama (if you decide to self-host)
-LLM_MODEL=gpt-4o-mini         # or ollama model
+LOG_LEVEL=INFO
+LOG_FILE=logs/fleet_agent.log
+
+OPENAI_API_KEY= api_key 
+PREDICT_URL=http://localhost:8000/predict
+LLM_PROVIDER=openai
+LLM_MODEL=gpt-4o-mini
 LLM_TEMPERATURE=0.1
-LLM_TIMEOUT_SECS=30
+LLM_TIMEOUT_SECS=40
 LLM_MAX_RETRIES=2
+POLICY_HIGH_PROB=0.7
+POLICY_MED_PROB=0.4
 
-# Policy thresholds
-POLICY_HIGH_PROB=0.6
-POLICY_MED_PROB=0.3
+DATA_PATH="./src/app/ml/fleet_monitor_notscored_2.csv"
 
-# OpenAI API Key
-OPENAI_API_KEY=your_openai_key_here
-
-# AWS Settings
-AWS_ACCESS_KEY_ID=your_access_key_here
-AWS_SECRET_ACCESS_KEY=your_secret_key_here
-AWS_DEFAULT_REGION=ap-southeast-1
+S3_ENDPOINT=s3_static_webpoint
 ```
-
 
 ## ☁️ AWS Setup
 
@@ -107,11 +101,16 @@ Fill in:
 ```
 AWS Access Key ID: your_access_key
 AWS Secret Access Key: your_secret_key
-Default region name: ap-southeast-1
+Default region name: region
 Default output format: json
 ```
 
-### 2. Upload Frontend to S3
+Then,
+```bash
+aws configure set aws_session_token "your_token"
+```
+
+### 2. Upload Frontend to S3 (as Dev)
 
 ```bash
 aws s3 cp ./src/app/static/index.html s3://your-bucket-name --acl public-read
@@ -127,7 +126,7 @@ Set **index document** to `index.html`.
 ## ▶️ Running the Backend
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 Backend endpoints:
@@ -143,7 +142,7 @@ Backend endpoints:
 1. SSH into EC2
 2. Pull latest code
 3. Install dependencies
-4. Run with `uvicorn` or `gunicorn`
+4. Run with `uvicorn`
 
 ### S3 Frontend
 
@@ -160,7 +159,7 @@ Backend endpoints:
    * `< 0.3` → **Low**
 3. If LLM and probability disagree:
 
-   * Urgency is **elevated** for high risk
+   * Urgency is **elevated** for high risk, user is notified through pop up message.
    * Urgency is **demoted** if probability is low
 
 

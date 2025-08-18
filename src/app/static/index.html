@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Fleet Maintenance Agent</title>
 <style>
-  :root { --bg:#0b1220; --card:#121a2b; --text:#e8eefc; --muted:#9bb0d1; --accent:#6aaeff; --ok:#30d158; --warn:#ffd60a; --bad:#ff453a; --border:#1e2a44; }
+  :root { --bg:#0b1220; --card:#121a2b; --text:#e8eefc; --muted:#9bb0d1; --accent:#6aaeff; --ok:#30d158; --warn:#ffd60a; --bad:#ff453a; --border:#1e2a44; --ring:#3b82f6; }
   * { box-sizing: border-box; }
   body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial; background:var(--bg); color:var(--text);}
   header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
@@ -14,7 +14,9 @@
   @media (max-width: 920px) { main { grid-template-columns: 1fr; } }
   .card { background:var(--card); border:1px solid var(--border); border-radius:16px; padding:16px; }
   label { font-size:12px; color:var(--muted); display:block; margin:8px 0 6px; }
-  input, textarea, select { width:100%; padding:10px 12px; border-radius:12px; border:1px solid #2a3b60; background:#0f1727; color:var(--text); }
+  input, textarea, select, button { font: inherit; }
+  input, textarea, select { width:100%; padding:10px 12px; border-radius:12px; border:1px solid #2a3b60; background:#0f1727; color:var(--text); outline:none; }
+  input:focus, textarea:focus, select:focus, button:focus { box-shadow: 0 0 0 3px rgba(59,130,246,.35); border-color: var(--ring); }
   textarea { min-height:120px; font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace; }
   button { cursor:pointer; padding:12px 14px; border-radius:12px; border:1px solid #2a3b60; background:#10203a; color:var(--text); }
   button.primary { background:linear-gradient(180deg, #1a66ff, #114ee0); border:none; }
@@ -29,46 +31,76 @@
   .pill { display:inline-flex; align-items:center; gap:6px; padding:4px 10px; border-radius:999px; font-size:12px; border:1px solid #2a3b60; }
   .hint { color:var(--muted); font-size:12px; margin-top:6px; }
   .footer { padding:16px 20px; color:var(--muted); font-size:12px; border-top:1px solid var(--border); }
+  .inline-spinner { display:inline-block; width:1em; height:1em; border:2px solid #2a3b60; border-top-color: var(--accent); border-radius:50%; animation:spin 1s linear infinite; vertical-align:middle; margin-left:6px;}
+  .spinner { width:18px; height:18px; border:2px solid #2a3b60; border-top-color: var(--accent); border-radius:50%; animation:spin 1s linear infinite; display:inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hidden { display:none !important; }
+
+  /* Popup modal */
+  .popup { display:none; position: fixed; z-index: 9999; inset:0; background: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
+  .popup-content { background: var(--card); padding: 20px; border-radius: 16px; width: 360px; box-shadow: 0 8px 24px rgba(0,0,0,0.5); text-align: center; outline: none; }
+  #popup-close { float: right; cursor: pointer; font-size: 20px; color: var(--muted); }
+  #popup-close:hover { color: var(--text); }
 </style>
 </head>
 <body>
 <header>
   <h1>🛠️ Fleet Maintenance Agent</h1>
   <span class="pill">API: <code id="api-base"></code></span>
+  <button id="api-edit" title="Change API base" style="margin-left:8px;">Change</button>
+
+  <!-- lightweight modal -->
+  <div id="api-modal" class="hidden" role="dialog" aria-modal="true" aria-labelledby="api-title" style="position:fixed; inset:0; background:rgba(0,0,0,.6); z-index:10000; align-items:center; justify-content:center;">
+    <div style="background:#121a2b; border:1px solid #1e2a44; padding:16px; border-radius:12px; width:420px; max-width:90%;">
+      <h3 id="api-title" style="margin:0 0 8px;">Set API base URL</h3>
+      <input id="api-input" placeholder="https://api.example.com:8000" style="width:100%; padding:10px 12px; border-radius:10px; border:1px solid #2a3b60; background:#0f1727; color:#e8eefc;">
+      <div style="display:flex; gap:8px; margin-top:12px; justify-content:flex-end;">
+        <button id="api-reset">Reset to default</button>
+        <button id="api-cancel">Cancel</button>
+        <button id="api-save" class="primary">Save</button>
+      </div>
+      <div class="hint" style="margin-top:8px;">Tip: you can also pass <code>?api=URL</code> in the page URL to override once.</div>
+    </div>
+  </div>
 </header>
 
 <main>
-  <section class="card">
-    <h2 style="margin:4px 0 12px;">Submit Telemetry</h2>
+  <section class="card" aria-labelledby="submit-title">
+    <h2 id="submit-title" style="margin:4px 0 12px;">Submit Telemetry</h2>
     <div class="row">
-        <div>
-            <label>Region</label>
-            <select id="region"></select>
+      <div>
+        <label for="region">Region</label>
+        <select id="region" aria-busy="false"></select>
+      </div>
+      <div>
+        <label for="fleetid">Fleet ID</label>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <select id="fleetid" disabled aria-busy="false"></select><span id="fleet-spin" class="spinner hidden" aria-hidden="true"></span>
         </div>
-        <div>
-            <label>Fleet ID</label>
-            <select id="fleetid" disabled></select>
-        </div>
+      </div>
     </div>
     <div class="row">
-        <div>
-            <label>Truck ID</label>
-            <select id="truckid" disabled></select>
+      <div>
+        <label for="truckid">Truck ID</label>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <select id="truckid" disabled aria-busy="false"></select><span id="truck-spin" class="spinner hidden" aria-hidden="true"></span>
         </div>
-        <div></div>
-    </div>      
-    <label>Optional: Telemetry JSON</label>
+      </div>
+      <div></div>
+    </div>
+    <label for="telemetry">Optional: Telemetry JSON</label>
     <textarea id="telemetry" placeholder='{"Measurement_timestamp":"22FEB16:17:55:52","Vehicle_speed_sensor":26,...}'></textarea>
     <div class="hint">Leave empty to let the backend simulate the latest reading.</div>
     <div style="display:flex; gap:10px; margin-top:12px;">
       <button id="run" class="primary">Run Agent</button>
       <button id="clear">Clear</button>
+      <span id="run-spin" class="inline-spinner hidden" aria-hidden="true"></span>
     </div>
-    <div class="hint" id="status"></div>
+    <div class="hint" id="status" role="status" aria-live="polite"></div>
   </section>
 
-  <section class="card">
-    <h2 style="margin:4px 0 12px;">Result</h2>
+  <section class="card" aria-labelledby="result-title">
+    <h2 id="result-title" style="margin:4px 0 12px;">Result</h2>
     <div class="metrics" id="metrics">
       <div class="metric">
         <h3>Failure Prob (7d)</h3>
@@ -110,42 +142,13 @@
     </div>
   </section>
 
-  <div id="popup" class="popup">
-    <div class="popup-content">
-      <span id="popup-close">&times;</span>
-      <h2>⚠️ Urgent Alert</h2>
+  <div id="popup" class="popup" aria-hidden="true">
+    <div class="popup-content" role="dialog" aria-modal="true" aria-labelledby="popup-title" tabindex="-1">
+      <span id="popup-close" aria-label="Close">&times;</span>
+      <h2 id="popup-title">⚠️ Urgent Alert</h2>
       <p id="popup-message">–</p>
     </div>
   </div>
-
-  <style>
-    /* Popup modal styles */
-    .popup {
-      display: none; /* Hidden by default */
-      position: fixed;
-      z-index: 9999;
-      left: 0; top: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.6);
-      justify-content: center;
-      align-items: center;
-    }
-    .popup-content {
-      background: var(--card);
-      padding: 20px;
-      border-radius: 16px;
-      width: 360px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-      text-align: center;
-    }
-    #popup-close {
-      float: right;
-      cursor: pointer;
-      font-size: 20px;
-      color: var(--muted);
-    }
-    #popup-close:hover { color: var(--text); }
-  </style>
-
 </main>
 
 <div class="footer">
@@ -153,16 +156,66 @@
 </div>
 
 <script>
-  // ---- Configure this to your FastAPI base URL ----
-  const API_BASE = "http://3.107.198.116:8000"; // fallback for file://
-  document.getElementById("api-base").textContent = API_BASE;
-
+  // ---------- tiny helpers ----------
   const el = (id) => document.getElementById(id);
-  const setStatus = (msg) => el("status").textContent = msg || "";
+  const setStatus = (msg) => el("status") && (el("status").textContent = msg || "");
   const cls = (prob) => prob >= 0.6 ? "bad" : prob >= 0.3 ? "warn" : "good";
 
-  // Populate a <select> with options
-  function fillSelect(selectEl, values, placeholder) {
+  // ---------- API base (query -> localStorage -> default) ----------
+  const DEFAULT_API_BASE = "http://3.105.229.32:8000";
+  const LS_KEY = "fmm_api_base";
+
+  function readApiFromQuery() {
+    try {
+      const u = new URL(window.location.href);
+      const v = u.searchParams.get("api");
+      return v && v.trim() ? v.trim() : null;
+    } catch { return null; }
+  }
+
+  function sanitizeApi(url) {
+    return (url || "").replace(/\/+$/,"");
+  }
+
+  function looksLikeUrl(s) {
+    try { const u = new URL(s); return !!u.protocol && !!u.host; } catch { return false; }
+  }
+
+  let API_BASE = (function initApiBase(){
+    const fromQuery = readApiFromQuery();
+    if (fromQuery) {
+      const clean = sanitizeApi(fromQuery);
+      try { localStorage.setItem(LS_KEY, clean); } catch {}
+      return clean;
+    }
+    try {
+      const fromLS = localStorage.getItem(LS_KEY);
+      if (fromLS && fromLS.trim()) return sanitizeApi(fromLS);
+    } catch {}
+    return DEFAULT_API_BASE;
+  })();
+
+  // ---------- fetch util with timeout + abort ----------
+  async function fetchJSON(url, opts = {}, timeoutMs = 15000) {
+    const ctrl = new AbortController();
+    const id = setTimeout(() => ctrl.abort(new DOMException("Timeout", "AbortError")), timeoutMs);
+    try {
+      const res = await fetch(url, { signal: ctrl.signal, ...opts });
+      const ct = res.headers.get("content-type") || "";
+      if (!res.ok) {
+        let detail = "";
+        try { detail = ct.includes("application/json") ? JSON.stringify(await res.json()) : await res.text(); } catch {}
+        throw new Error(`HTTP ${res.status} ${res.statusText}${detail ? " - " + detail : ""}`);
+      }
+      return ct.includes("application/json") ? res.json() : res.text();
+    } finally {
+      clearTimeout(id);
+    }
+  }
+
+  // ---------- select helpers ----------
+  function fillSelect(selectEl, items, placeholder) {
+    if (!selectEl) return;
     selectEl.innerHTML = "";
     const ph = document.createElement("option");
     ph.value = "";
@@ -170,127 +223,124 @@
     ph.disabled = true;
     ph.selected = true;
     selectEl.appendChild(ph);
-
-    for (const v of values) {
+    for (const item of items || []) {
+      const val = typeof item === "object" ? item.value ?? item.id ?? item.code ?? String(item) : String(item);
+      const label = typeof item === "object" ? item.label ?? item.name ?? String(item) : String(item);
       const opt = document.createElement("option");
-      opt.value = v;
-      opt.textContent = v;
+      opt.value = val;
+      opt.textContent = label;
       selectEl.appendChild(opt);
     }
   }
 
-  async function fetchJSON(url) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
-  }
+  // AbortControllers to prevent race conditions on cascading loads
+  let fleetsCtrl = null;
+  let trucksCtrl = null;
 
   async function loadRegions() {
-    const regionSel = el("region");
-    const fleetSel = el("fleetid");
-    const truckSel = el("truckid");
-
+    const regionSel = el("region"), fleetSel = el("fleetid"), truckSel = el("truckid");
     try {
+      setStatus("Loading regions…");
       const data = await fetchJSON(`${API_BASE}/meta/regions`);
-      fillSelect(regionSel, data.regions || [], "Select region");
-      // reset dependents
+      const regions = Array.isArray(data?.regions) ? data.regions : [];
+      fillSelect(regionSel, regions, "Select region");
       fillSelect(fleetSel, [], "Select fleet");
       fillSelect(truckSel, [], "Select truck");
-      fleetSel.disabled = true;
-      truckSel.disabled = true;
+      fleetSel.disabled = true; truckSel.disabled = true;
+      setStatus("");
     } catch (e) {
       console.error("Failed to load regions", e);
-      setStatus("Failed to load regions");
+      setStatus(`Failed to load regions: ${e.message}`);
     }
   }
 
   async function loadFleets() {
-    const regionSel = el("region");
-    const fleetSel = el("fleetid");
-    const truckSel = el("truckid");
-    const region = regionSel.value;
-
+    const regionSel = el("region"), fleetSel = el("fleetid"), truckSel = el("truckid");
+    const spin = el("fleet-spin");
+    const region = regionSel?.value;
     if (!region) return;
-
+    fleetsCtrl?.abort(); fleetsCtrl = new AbortController();
     try {
-      const data = await fetchJSON(`${API_BASE}/meta/fleets?region=${encodeURIComponent(region)}`);
-      fillSelect(fleetSel, data.fleets || [], "Select fleet");
+      fleetSel.disabled = true; truckSel.disabled = true; spin.classList.remove("hidden"); fleetSel.setAttribute("aria-busy","true");
+      setStatus("Loading fleets…");
+      const data = await fetchJSON(`${API_BASE}/meta/fleets?region=${encodeURIComponent(region)}`, { signal: fleetsCtrl.signal });
+      const fleets = Array.isArray(data?.fleets) ? data.fleets : [];
+      fillSelect(fleetSel, fleets, "Select fleet");
       fleetSel.disabled = false;
-      // reset trucks
       fillSelect(truckSel, [], "Select truck");
-      truckSel.disabled = true;
+      setStatus("");
     } catch (e) {
-      console.error("Failed to load fleets", e);
-      setStatus("Failed to load fleets");
+      if (e.name !== "AbortError") {
+        console.error("Failed to load fleets", e);
+        setStatus(`Failed to load fleets: ${e.message}`);
+      }
+    } finally {
+      spin.classList.add("hidden"); fleetSel.removeAttribute("aria-busy");
     }
   }
 
   async function loadTrucks() {
-    const region = el("region").value;
-    const fleetid = el("fleetid").value;
-    const truckSel = el("truckid");
-
+    const region = el("region")?.value;
+    const fleetid = el("fleetid")?.value;
+    const truckSel  = el("truckid");
+    const spin = el("truck-spin");
     if (!region || !fleetid) return;
-
+    trucksCtrl?.abort(); trucksCtrl = new AbortController();
     try {
-      const data = await fetchJSON(`${API_BASE}/meta/trucks?region=${encodeURIComponent(region)}&fleetid=${encodeURIComponent(fleetid)}`);
-      fillSelect(truckSel, data.trucks || [], "Select truck");
+      truckSel.disabled = true; spin.classList.remove("hidden"); truckSel.setAttribute("aria-busy","true");
+      setStatus("Loading trucks…");
+      const data = await fetchJSON(`${API_BASE}/meta/trucks?region=${encodeURIComponent(region)}&fleetid=${encodeURIComponent(fleetid)}`, { signal: trucksCtrl.signal });
+      const trucks = Array.isArray(data?.trucks) ? data.trucks : [];
+      fillSelect(truckSel, trucks, "Select truck");
       truckSel.disabled = false;
+      setStatus("");
     } catch (e) {
-      console.error("Failed to load trucks", e);
-      setStatus("Failed to load trucks");
+      if (e.name !== "AbortError") {
+        console.error("Failed to load trucks", e);
+        setStatus(`Failed to load trucks: ${e.message}`);
+      }
+    } finally {
+      spin.classList.add("hidden"); truckSel.removeAttribute("aria-busy");
     }
   }
 
-  // Wire cascading changes once DOM is ready
-  document.addEventListener("DOMContentLoaded", () => {
-    // show base in header
-    const apiBaseEl = el("api-base");
-    if (apiBaseEl) apiBaseEl.textContent = API_BASE;
+  function toggleRunLoading(on) {
+    const runBtn = el("run"), spin = el("run-spin");
+    if (!runBtn || !spin) return;
+    runBtn.disabled = on;
+    spin.classList.toggle("hidden", !on);
+    runBtn.textContent = on ? "Running…" : "Run Agent";
+  }
 
-    // initial load
-    loadRegions();
-
-    // onchange cascade
-    el("region").addEventListener("change", loadFleets);
-    el("fleetid").addEventListener("change", loadTrucks);
-  });
-
-
+  // ---------- run agent ----------
   async function runAgent() {
     setStatus("");
-    const runBtn = el("run");
-    runBtn.disabled = true;
-    runBtn.textContent = "Running…";
+    toggleRunLoading(true);
 
-    const regionVal = el("region").value;
+    const regionVal = el("region")?.value;
     const region = Number(regionVal);
-    const fleetid = el("fleetid").value;
-    const truckid = el("truckid").value;
+    const fleetid = el("fleetid")?.value;
+    const truckid = el("truckid")?.value;
 
     if (!fleetid || !truckid || !regionVal || Number.isNaN(region)) {
-      alert("Please fill Fleet ID, Truck ID, and Region (number).");
-      runBtn.disabled = false; runBtn.textContent = "Run Agent"; return;
+      alert("Please fill Region, Fleet ID, and Truck ID.");
+      toggleRunLoading(false);
+      return;
     }
 
     let new_reading = undefined;
-    const t = el("telemetry").value.trim();
+    const t = el("telemetry")?.value?.trim();
     if (t) {
       try { new_reading = JSON.parse(t); }
-      catch (e) { alert("Invalid telemetry JSON."); runBtn.disabled = false; runBtn.textContent = "Run Agent"; return; }
+      catch { alert("Invalid telemetry JSON."); toggleRunLoading(false); return; }
     }
 
     try {
-      const res = await fetch(`${API_BASE}/run`, {
+      const out = await fetchJSON(`${API_BASE}/run`, {
         method: "POST",
         headers: {"Content-Type":"application/json"},
         body: JSON.stringify({ fleetid, truckid, region, new_reading })
       });
-      if (!res.ok) {
-        const msg = await res.text();
-        throw new Error(`API error: ${msg}`);
-      }
-      const out = await res.json();
       render(out);
       setStatus("Success");
     } catch (err) {
@@ -298,58 +348,120 @@
       alert(err.message || "Request failed.");
       setStatus("Error");
     } finally {
-      runBtn.disabled = false;
-      runBtn.textContent = "Run Agent";
+      toggleRunLoading(false);
     }
   }
 
+  // ---------- render ----------
   function render(out) {
-    const prob = Number(out?.prob ?? 0);
+    const num = (v) => (v === null || v === undefined || Number.isNaN(Number(v))) ? NaN : Number(v);
+    const prob = num(out?.prob);
     el("m-prob").textContent = (isNaN(prob) ? "–" : prob.toFixed(4));
-    el("m-prob").className = "val " + cls(prob);
+    el("m-prob").className   = "val " + (isNaN(prob) ? "" : cls(prob));
 
     const need = !!out?.maintenance_needed;
     el("m-maint").textContent = need ? "Yes" : "No";
-    el("m-maint").className = "val " + (need ? "bad" : "good");
+    el("m-maint").className   = "val " + (need ? "bad" : "good");
 
     const urg = out?.urgency ?? "–";
     el("m-urgency").textContent = urg;
 
     const action = out?.action ?? "–";
     el("m-action").textContent = action;
-    el("m-expl").textContent  = out?.explanation ?? "–";
+    el("m-expl").textContent   = out?.explanation ?? "–";
 
-    // Show popup if urgency is "high"
     if (String(urg).toLowerCase() === "high") {
-      el("popup-message").textContent = action;
-      el("popup").style.display = "flex";
+      openPopup(action);
+    } else {
+      closePopup();
     }
 
-    // USAGE (expects backend to return out.usage)
     const u = out?.usage || {};
     el("u-model").textContent = u.model || "–";
     el("u-pt").textContent    = u.prompt_tokens ?? 0;
     el("u-ct").textContent    = u.completion_tokens ?? 0;
     el("u-tt").textContent    = u.total_tokens ?? 0;
+
     el("raw").textContent = JSON.stringify(out, null, 2);
   }
 
-  document.getElementById("run").addEventListener("click", runAgent);
-  document.getElementById("clear").addEventListener("click", () => {
-    el("telemetry").value = "";
-    ["m-prob","m-maint","m-urgency","m-action","m-expl","raw"].forEach(id => el(id).textContent = "–");
-    // reset usage block too
-    el("u-model").textContent = "–";
-    el("u-pt").textContent = "0";
-    el("u-ct").textContent = "0";
-    el("u-tt").textContent = "0";
-    el("u-cost").textContent = "$0.000000";
-    setStatus("");
-  });
-  document.getElementById("popup-close").addEventListener("click", () => {
-    el("popup").style.display = "none";
-  });
+  // ---------- popup (accessible) ----------
+  let lastFocused = null;
+  function openPopup(msg) {
+    const popup = el("popup"); const content = popup.querySelector(".popup-content");
+    el("popup-message").textContent = msg || "–";
+    popup.style.display = "flex"; popup.setAttribute("aria-hidden","false");
+    lastFocused = document.activeElement;
+    content.focus();
+    document.addEventListener("keydown", escHandler);
+    document.addEventListener("focus", trapFocus, true);
+  }
+  function closePopup() {
+    const popup = el("popup");
+    popup.style.display = "none"; popup.setAttribute("aria-hidden","true");
+    document.removeEventListener("keydown", escHandler);
+    document.removeEventListener("focus", trapFocus, true);
+    if (lastFocused) lastFocused.focus();
+  }
+  function escHandler(e){ if (e.key === "Escape") closePopup(); }
+  function trapFocus(e){
+    const popup = el("popup");
+    if (popup.getAttribute("aria-hidden") === "true") return;
+    if (!popup.contains(e.target)) {
+      e.stopPropagation();
+      popup.querySelector(".popup-content").focus();
+    }
+  }
 
+  // ---------- DOM ready wiring ----------
+  document.addEventListener("DOMContentLoaded", () => {
+    // show current API base
+    if (el("api-base")) el("api-base").textContent = API_BASE;
+
+    // API base modal
+    const apiModal = el("api-modal");
+    const apiInput = el("api-input");
+    const openModal = () => { apiInput.value = API_BASE; apiModal.classList.remove("hidden"); apiInput.focus(); };
+    const closeModal = () => { apiModal.classList.add("hidden"); };
+
+    el("api-edit")?.addEventListener("click", openModal);
+    el("api-cancel")?.addEventListener("click", closeModal);
+    el("api-reset")?.addEventListener("click", () => {
+      API_BASE = DEFAULT_API_BASE;
+      try { localStorage.setItem(LS_KEY, API_BASE); } catch {}
+      el("api-base").textContent = API_BASE;
+      closeModal();
+      loadRegions();
+    });
+    el("api-save")?.addEventListener("click", () => {
+      const val = apiInput?.value?.trim();
+      if (!val) return;
+      if (!looksLikeUrl(val)) { alert("Please enter a valid URL, e.g., https://api.example.com:8000"); return; }
+      API_BASE = sanitizeApi(val);
+      try { localStorage.setItem(LS_KEY, API_BASE); } catch {}
+      el("api-base").textContent = API_BASE;
+      closeModal();
+      loadRegions();
+    });
+
+    // initial load + cascading events
+    loadRegions();
+    el("region")?.addEventListener("change", loadFleets);
+    el("fleetid")?.addEventListener("change", loadTrucks);
+
+    // buttons
+    el("run")?.addEventListener("click", runAgent);
+    el("clear")?.addEventListener("click", () => {
+      if (el("telemetry")) el("telemetry").value = "";
+      ["m-prob","m-maint","m-urgency","m-action","m-expl"].forEach(id => { el(id).textContent = "–"; el(id).className = "val"; });
+      el("raw").textContent = "–";
+      ["u-model","u-pt","u-ct","u-tt"].forEach(id => el(id).textContent = id === "u-model" ? "–" : "0");
+      setStatus("");
+      closePopup();
+    });
+    el("popup-close")?.addEventListener("click", closePopup);
+    el("popup")?.addEventListener("click", (e) => { if (e.target.id === "popup") closePopup(); });
+  });
 </script>
 </body>
 </html>
