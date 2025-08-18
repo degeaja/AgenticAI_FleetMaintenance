@@ -1,11 +1,11 @@
 # Fleet Maintenance Management (FMM) with LLM Advisor
 
 This project is a **fleet maintenance management system** enhanced with **AI-powered advisory capabilities**.  
-It integrates **LangChain**, **OpenAI/Ollama LLMs**, and AWS services to provide real-time explanations, actions, and urgency ratings based on telemetry and diagnostic data.
+It integrates **LangGraph**, **OpenAI ChatGPT**, and AWS services to provide real-time explanations, actions, and urgency ratings based on telemetry and diagnostic data.
 
 ## 🚀 Features
 - **LLM Advisor Node** (`app/agent/nodes_llm.py`)
-  - Configurable to use **OpenAI** or **Ollama** via `.env`
+  - Uses **OpenAI API**, with parameters configurable via `.env`
   - Structured JSON output with **Pydantic** (safe parsing)
   - Context-aware prompt including:
     - Telemetry data
@@ -19,10 +19,6 @@ It integrates **LangChain**, **OpenAI/Ollama LLMs**, and AWS services to provide
   - API backend on EC2
 - **Observability**
   - Tracks LLM token usage via `TokenUsageHandler`
-- **Resilient API**
-  - Retries on failures with exponential backoff
-  - Fallback outputs if LLM call fails
-
 
 
 ## 📂 Project Structure
@@ -31,13 +27,27 @@ It integrates **LangChain**, **OpenAI/Ollama LLMs**, and AWS services to provide
 app/
 ├── agent/
 │   ├── nodes\_llm.py         # LLM advisor node
-│   └── ...
+│   └── nodes\_ml.py
+│   └── graph.py
+│   └── states.py
+├── api/
+│   └── main.py               # everything needed for FastAPI
+├── ml/
+│   └── config.py
+│   └── data_prep.py
+│   └── features.py
+│   └── lstm_arch.py
+│   └── model_io.py
+│   └── best_model_08-18 1.pt
+│   └── scaler.save
 ├── observability/
-│   └── token\_callback.py    # Tracks OpenAI token usage
-src/
-└── app/static/
-└── index.html           # Frontend entry point (moved to S3 in prod)
-
+│   └── instrumentation.py
+│   └── logging_setup.py
+│   └── token_callback.py
+│   └── usage.py
+├── static/
+│   └── index.html           # Frontend entry point (moved to S3 in prod)
+├── logs/                    # logging needs
 ```
 
 
