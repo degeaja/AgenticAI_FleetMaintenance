@@ -109,6 +109,43 @@
       <pre id="raw">–</pre>
     </div>
   </section>
+
+  <div id="popup" class="popup">
+    <div class="popup-content">
+      <span id="popup-close">&times;</span>
+      <h2>⚠️ High Urgency Alert</h2>
+      <p id="popup-message">–</p>
+    </div>
+  </div>
+
+  <style>
+    /* Popup modal styles */
+    .popup {
+      display: none; /* Hidden by default */
+      position: fixed;
+      z-index: 9999;
+      left: 0; top: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.6);
+      justify-content: center;
+      align-items: center;
+    }
+    .popup-content {
+      background: var(--card);
+      padding: 20px;
+      border-radius: 16px;
+      width: 360px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+    #popup-close {
+      float: right;
+      cursor: pointer;
+      font-size: 20px;
+      color: var(--muted);
+    }
+    #popup-close:hover { color: var(--text); }
+  </style>
+
 </main>
 
 <div class="footer">
@@ -117,7 +154,7 @@
 
 <script>
   // ---- Configure this to your FastAPI base URL ----
-  const API_BASE = "http://3.25.115.125:8000"; // fallback for file://
+  const API_BASE = "http://3.107.198.116:8000"; // fallback for file://
   document.getElementById("api-base").textContent = API_BASE;
 
   const el = (id) => document.getElementById(id);
@@ -278,8 +315,15 @@
     const urg = out?.urgency ?? "–";
     el("m-urgency").textContent = urg;
 
-    el("m-action").textContent = out?.action ?? "–";
+    const action = out?.action ?? "–";
+    el("m-action").textContent = action;
     el("m-expl").textContent  = out?.explanation ?? "–";
+
+    // Show popup if urgency is "high"
+    if (String(urg).toLowerCase() === "high") {
+      el("popup-message").textContent = action;
+      el("popup").style.display = "flex";
+    }
 
     // USAGE (expects backend to return out.usage)
     const u = out?.usage || {};
@@ -302,6 +346,10 @@
     el("u-cost").textContent = "$0.000000";
     setStatus("");
   });
+  document.getElementById("popup-close").addEventListener("click", () => {
+    el("popup").style.display = "none";
+  });
+
 </script>
 </body>
 </html>
