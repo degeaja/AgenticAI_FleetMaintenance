@@ -128,7 +128,7 @@ def _build_messages(state: Dict[str, Any]) -> list:
         "Produce a short, human-friendly summary for the driver/dispatcher and a concrete next action.\n"
         "Rules:\n"
         '1) Explanation: 2 short sentences, reference relevant signals.\n'
-        '2) Action: 1 imperative sentence (what to do next, include timeframe if relevant).\n'
+        '2) Action: 1 polite imperative sentence (what to do next, include timeframe if relevant).\n'
         '3) Urgency: one of ["low","medium","high"].\n'
         "Return a JSON object with exactly these keys: explanation, action, urgency."
     ))
