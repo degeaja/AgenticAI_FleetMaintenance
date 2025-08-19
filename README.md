@@ -22,7 +22,7 @@ It integrates **LangGraph**, **OpenAI ChatGPT**, and AWS services to provide rea
 
 ## Installation
 
-See [[src/README.MD]]
+See [Installation](src/README.MD)
 
 ## 📂 Project Structure
 ```
