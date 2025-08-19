@@ -2,3 +2,6 @@
 .cpython-311.pyc
 __pycache__/
 logs/
+aws_setup.sh
+src/logs/fleet_agent.log
+ipconfig.txt
